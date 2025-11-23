@@ -1,141 +1,77 @@
-# create_report.py
-"""
-Employee Performance Analysis Report
-- Loads employees.csv if present; otherwise generates a synthetic 100-row dataset.
-- Calculates and prints the frequency count for the "R&D" department.
-- Creates a histogram of department distribution (matplotlib).
-- Saves histogram as histogram.png and an HTML report file report.html which embeds the image.
-- Includes verification email: 24ds2000040@ds.study.iitm.ac.in
-"""
-
 import os
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from datetime import datetime
+import base64
 
-sns.set(style="whitegrid")  # optional; matplotlib will be used for the plot saving
-
-CSV_FILENAME = "employees.csv"
-HIST_FILENAME = "histogram.png"
-HTML_FILENAME = "report.html"
+# Verification email
 VERIF_EMAIL = "24ds2000040@ds.study.iitm.ac.in"
 
-def generate_synthetic_csv(path, n=100, random_seed=42):
-    np.random.seed(random_seed)
-    departments = ["HR", "Marketing", "Finance", "R&D", "Sales", "IT", "Operations", "Legal"]
-    regions = ["Asia Pacific", "Africa", "North America", "Latin America", "Europe", "Middle East"]
-    rows = []
-    for i in range(1, n+1):
-        employee_id = f"EMP{i:03d}"
-        dept = np.random.choice(departments, p=[0.09,0.15,0.15,0.12,0.22,0.13,0.12,0.02])
-        region = np.random.choice(regions)
-        perf = round(np.random.normal(loc=75, scale=10), 2)
-        perf = min(max(perf, 30), 100)  # keep in 30-100
-        years_exp = int(np.abs(np.random.normal(loc=6, scale=5)) + 0.5)
-        sat = round(np.clip(np.random.normal(loc=3.8, scale=0.9), 1.0, 5.0), 1)
-        rows.append([employee_id, dept, region, perf, years_exp, sat])
+# --- Step 1: create dataset if not found ---
+data_file = "employees.csv"
+if not os.path.exists(data_file):
+    df = pd.DataFrame({
+        "employee_id": [f"EMP{i:03d}" for i in range(1, 101)],
+        "department": ["R&D","HR","Marketing","Finance","Sales"] * 20,
+        "region": ["Asia","Africa","Europe","America","Asia"] * 20,
+        "performance_score": [70 + (i % 20) for i in range(100)],
+        "years_experience": [i % 15 for i in range(100)],
+        "satisfaction_rating": [3 + (i % 2) for i in range(100)],
+    })
+    df.to_csv(data_file, index=False)
+else:
+    df = pd.read_csv(data_file)
 
-    df = pd.DataFrame(rows, columns=["employee_id","department","region","performance_score","years_experience","satisfaction_rating"])
-    df.to_csv(path, index=False)
-    print(f"Synthetic dataset created at '{path}' with {n} rows.")
+# --- Step 2: compute frequency count ---
+rd_count = df[df["department"] == "R&D"].shape[0]
+print("Frequency count for R&D department:", rd_count)
 
-def load_data(path):
-    df = pd.read_csv(path)
-    return df
+# --- Step 3: plot histogram ---
+sns.set(style="whitegrid")
+plt.figure(figsize=(8,5))
+df["department"].value_counts().plot(kind="bar")
+plt.title("Department Distribution")
+plt.xlabel("Department")
+plt.ylabel("Count")
+plt.tight_layout()
+plt.savefig("histogram.png")
+plt.close()
 
-def count_rd(df):
-    # Count exact matches for "R&D"
-    # If department column has slight variants we ensure to match ignoring whitespace
-    dept_clean = df['department'].astype(str).str.strip()
-    rd_mask = dept_clean == "R&D"
-    count = rd_mask.sum()
-    return int(count)
+# Encode image to base64 for embedding inside HTML
+with open("histogram.png", "rb") as img_file:
+    encoded = base64.b64encode(img_file.read()).decode("utf-8")
 
-def plot_department_histogram(df, out_path):
-    counts = df['department'].astype(str).str.strip().value_counts().sort_values(ascending=False)
-    plt.figure(figsize=(10,6))
-    # use seaborn barplot built on matplotlib for nicer look but we are saving with matplotlib
-    sns.barplot(x=counts.values, y=counts.index)
-    plt.xlabel("Number of Employees")
-    plt.ylabel("Department")
-    plt.title("Distribution of Employees by Department")
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=150)
-    plt.close()
-    print(f"Histogram saved to '{out_path}'.")
+# --- Step 4: embed the Python code inside HTML ---
+with open("create_report.py", "r") as f:
+    python_code = f.read()
 
-def make_html_report(html_path, img_path, rd_count, total_employees):
-    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-    html_content = f"""<!doctype html>
-<html lang="en">
+html_content = f"""
+<html>
 <head>
-  <meta charset="utf-8">
-  <title>Employee Performance Report</title>
-  <style>
-    body {{ font-family: Arial, sans-serif; margin: 30px; color: #0f172a; }}
-    .header {{ margin-bottom: 20px; }}
-    .meta {{ color: #555; margin-bottom: 10px; }}
-    .count-box {{ background: #f3f4f6; padding: 12px; border-radius: 8px; display:inline-block; }}
-    img {{ max-width: 900px; height: auto; border: 1px solid #ddd; padding: 6px; background:white; }}
-    footer {{ margin-top: 30px; color:#666; font-size:0.9em; }}
-  </style>
+<title>Employee Performance Report</title>
 </head>
 <body>
-  <div class="header">
-    <h1>Employee Performance — Department Distribution</h1>
-    <div class="meta">Generated: {now} (UTC)</div>
-    <div class="meta">Verification email: <strong>{VERIF_EMAIL}</strong></div>
-  </div>
+<h1>Employee Performance Report</h1>
 
-  <h2>R&amp;D department frequency</h2>
-  <div class="count-box">
-    <strong>R&amp;D count:</strong> {rd_count} &nbsp; | &nbsp; <strong>Total employees:</strong> {total_employees}
-  </div>
+<h3>Verification Email:</h3>
+<p>{VERIF_EMAIL}</p>
 
-  <h2 style="margin-top:24px;">Department distribution (histogram)</h2>
-  <div>
-    <img src="{os.path.basename(img_path)}" alt="Histogram of Departments">
-  </div>
+<h3>R&D Department Frequency:</h3>
+<p>{rd_count}</p>
 
-  <footer>
-    <div>Instructions: This report was generated by <code>create_report.py</code>. To reproduce, run the script in the same folder as the CSV file.</div>
-  </footer>
+<h3>Histogram Visualization:</h3>
+<img src="data:image/png;base64,{encoded}" width="600"/>
+
+<h3>Python Code Used:</h3>
+<pre><code>
+{python_code}
+</code></pre>
+
 </body>
 </html>
 """
-    with open(html_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
-    print(f"HTML report saved to '{html_path}'.")
 
-def main():
-    # Step 1: ensure CSV exists (create if not)
-    if not os.path.exists(CSV_FILENAME):
-        print(f"'{CSV_FILENAME}' not found. Creating synthetic dataset...")
-        generate_synthetic_csv(CSV_FILENAME, n=100)
+with open("report.html", "w", encoding="utf-8") as f:
+    f.write(html_content)
 
-    # Step 2: load data
-    df = load_data(CSV_FILENAME)
-    total_employees = len(df)
-    if total_employees == 0:
-        raise SystemExit("CSV file is empty. Please provide a valid employees.csv file.")
-
-    # Step 3: compute R&D count and print it
-    rd_count = count_rd(df)
-    print(f"Frequency count for 'R&D' department: {rd_count}")
-
-    # Step 4: create histogram and save
-    plot_department_histogram(df, HIST_FILENAME)
-
-    # Step 5: create HTML report that embeds the image and includes the count and email
-    make_html_report(HTML_FILENAME, HIST_FILENAME, rd_count, total_employees)
-
-    print("\nDone. Files created:")
-    print(f" - {CSV_FILENAME}")
-    print(f" - {HIST_FILENAME}")
-    print(f" - {HTML_FILENAME}")
-    print("\nTo view the report locally open the HTML file in your browser (double-click or run: python -m http.server 8000 and visit http://localhost:8000/{HTML_FILENAME})")
-
-if __name__ == "__main__":
-    main()
+print("report.html created successfully.")
