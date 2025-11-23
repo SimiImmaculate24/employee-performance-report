@@ -1,0 +1,6 @@
+employee_id,department,region,performance_score,years_experience,satisfaction_rating
+EMP001,HR,Asia Pacific,88.23,12,5
+EMP002,Marketing,Africa,86.73,2,4.9
+EMP003,Finance,North America,80.94,9,3.2
+EMP004,Finance,Latin America,89.41,8,3.2
+EMP005,R&D,North America,62.87,7,3.1
